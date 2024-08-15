@@ -1,0 +1,7 @@
+/vendor
+/node_modules
+/importscript
+.env.example
+readme.md
+.gitignore
+.gitattributes

@@ -1,0 +1,51 @@
+version: "3.7"
+
+# specifies the full multi-container app with db, parking prediction processes and the webserver
+# connects them together as well
+services:
+  app:
+    image: local/smart_parking_webserver
+    # the wait-for-it.sh scripts are just to make sure the containers that depend on the db don't start before it
+    command: sh -c "./wait-for-it.sh mariadb:3306 --
+                      php artisan key:generate;
+                      sudo chown -R bitnami vendor/composer;
+                      sudo chown -R bitnami vendor/autoload.php;
+                      sudo chown -R bitnami new_parking_prediction;
+                      composer dump-autoload;
+                    ./start.sh;"
+    ports:
+      - 5000:5000
+    working_dir: /smart_parking
+    volumes: # this mounts the src files so that changes made locally sync across to the containers
+      - ./:/smart_parking
+    environment:
+      MYSQL_HOST: mariadb
+      MYSQL_USER: smart_parker
+      MYSQL_PASSWORD: smartParking
+      MYSQL_ROOT_PASSWORD: rootPassword
+      MYSQL_DB: smartParking
+    depends_on:
+      - 'mariadb'
+  parking_prediction_service:
+    image: local/parking_prediction_service
+    command: sh -c "./wait-for-it.sh mariadb:3306 -- ./start.sh; tail -F non_existent_file"
+    working_dir: /ml_pipeline
+    volumes:
+      - ./new_parking_prediction:/ml_pipeline
+    environment:
+      MYSQL_HOST: mariadb
+      MYSQL_USER: smart_parker
+      MYSQL_PASSWORD: smartParking
+      MYSQL_ROOT_PASSWORD: rootPassword
+      MYSQL_DB: smartParking
+    depends_on:
+      - 'mariadb'
+  mariadb:
+    image: mariadb:5.5.60
+    volumes:
+      - test-mariadb-data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootPassword # you will probably want to know this!
+      MYSQL_DATABASE: smartParking
+volumes: # creates a separate volume which exists outside of the lifetime of the multi-container app
+  test-mariadb-data:
